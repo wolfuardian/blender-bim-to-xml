@@ -7,6 +7,16 @@ filename = "UnitTest_ExportXML_20230425_001.xml"
 file = output + "\\" + filename
 
 
+def select_collection(name):
+    def recursive_search(collection):
+        for collection in collection.children:
+            if name in collection.name:
+                bpy.context.view_layer.active_layer_collection = collection
+            recursive_search(collection)
+        return bpy.context.view_layer.active_layer_collection
+    return recursive_search(bpy.context.view_layer.layer_collection)
+
+
 class XmlBuilder:
     def __init__(self):
         self.root = None
@@ -41,12 +51,13 @@ class XmlBuilder:
 
 
 def main():
+    print("\n\n\n")
+    # Create XML
     xb = XmlBuilder()
     xb = xb.factory("OCMS2_0", "2023.02.16", "Unity")
-
-
-
-
+    # Analysis collection
+    col_building = select_collection("IfcBuilding/")
+    print(f"col_building: {col_building}")
 
     xb.write(file)
 
