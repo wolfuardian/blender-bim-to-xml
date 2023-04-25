@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='utf-8'?>
+<root>
+    <Object type="Device">Cube</Object>
+    <Object type="Device">Light</Object>
+    <Object type="Device">Camera</Object>
+</root>

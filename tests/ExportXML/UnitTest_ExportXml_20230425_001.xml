@@ -1,0 +1,4 @@
+<Root xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+    <DataSource ProductType="OCMS2_0" Version="2023.02.16" Source="Unity" />
+    <Object type="Building" category="" name="" alias="" model="" time="" noted="" />
+</Root>
