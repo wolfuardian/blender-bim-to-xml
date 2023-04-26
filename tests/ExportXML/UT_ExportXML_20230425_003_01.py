@@ -53,13 +53,14 @@ class XmlBuilder:
 def main():
     print("\n\n\n")
     # Create XML
-    xb = XmlBuilder()
-    xb = xb.factory("OCMS2_0", "2023.02.16", "Unity")
+    xml_builder = XmlBuilder()
+    xml_builder = xml_builder.factory("OCMS2_0", "2023.02.16", "Unity")
     # Analysis collection
+    col_building = select_collection("IfcProject/")
     col_building = select_collection("IfcBuilding/")
     print(f"col_building: {col_building}")
 
-    xb.write(file)
+    xml_builder.write(file)
 
 
 main()
