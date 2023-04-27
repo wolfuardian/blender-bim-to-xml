@@ -1,5 +1,3 @@
-from typing import Set, Any
-
 import bpy
 import xml.etree.ElementTree as Et
 from datetime import datetime
@@ -44,8 +42,6 @@ class XmlCreateSettings:
 
 
 class XmlCreate:
-    bl_objects: set[Any]
-
     def __init__(self, xml_create_settings: XmlCreateSettings):
         self.xml_create_settings = xml_create_settings
         self.root = xml_create_settings.root
@@ -92,8 +88,6 @@ class XmlCreate:
                     self.ifc_building_storey[content["name"]] = content
 
     def create_xml_building(self):
-        parent = self.root
-        # parent_path = self.get_last_path(parent)
         parent, parent_path = self.get_elements_with_paths(self.root)[-1]
         print(f"[create_xml_building] parent_path: {parent_path}")
 
@@ -136,8 +130,8 @@ class XmlCreate:
             "bl_object": collection.name,
             "bl_type": type(collection).__name__,
             "ifc_info": self.ifc_building,
-            "parent": parent,
-            "this": None,
+            "parent_path": parent_path,
+            "this_path": None,
             "attributes": attributes,
             "transform": transform
         }
@@ -145,15 +139,16 @@ class XmlCreate:
         # self.bl_objects.add({self.add_element(content): content})
         content = self.add_element(content)
         # element, this_path = self.get_element_with_path(self.root)
-        this, this_path = self.get_elements_with_paths(self.root)[-1]
-        print(f"[create_xml_building] this_path: {this_path}")
-        self.elements[this_path] = this_path
+        # this, this_path = self.get_elements_with_paths(self.root)[-1]
+        # print(f"[create_xml_building] this_path: {this_path}")
+        # self.elements[this_path] = this
+        # print(f"[create_xml_building] elements: {self.elements}")
         bl_object = self.add_properties(content)
         self.bl_objects.add(bl_object)
 
     def create_xml_building_storey(self, building_storey):
         parent_bl_object = self.find_bl_object_by_ifc_info("head", "IfcBuilding")
-        parent = parent_bl_object["this"]
+        parent = parent_bl_object["this_path"]
 
         # parent = self.xml_building
 
@@ -196,8 +191,8 @@ class XmlCreate:
             "bl_object": collection.name,
             "bl_type": type(collection).__name__,
             "ifc_info": building_storey,
-            "parent": parent,
-            "this": None,
+            "parent_path": parent,
+            "this_path": None,
             "attributes": attributes,
             "transform": transform
         }
@@ -293,12 +288,15 @@ class XmlCreate:
         element, path = self.get_elements_with_paths(root)[-1]
         return path
 
-    @staticmethod
-    def add_element(content):
+    def add_element(self, content):
         # bl_object = element["bl_object"]
-        parent = content["parent"]
+        parent_path = content["parent_path"]
         attributes = content["attributes"]
         transform = content["transform"]
+
+        parent = self.root
+        if self.elements.keys():
+            parent = self.elements[parent_path]
 
         sub = Et.SubElement(parent, "Object")
         sub.set("type", attributes["type"])
@@ -310,9 +308,10 @@ class XmlCreate:
         sub.set("model", attributes["model"])
         sub.set("time", attributes["time"])
         sub.set("noted", attributes["noted"])
-        content["this"] = sub
-        print(f"[add_element] this: {sub}")
-        print(f"[add_element] parent: {parent}")
+        this, this_path = self.get_elements_with_paths(self.root)[-1]
+        self.elements[this_path] = this
+        content["this_path"] = this_path
+        print(f"[add_element] this_path: {this_path}")
         print(f"[add_element] attributes: {attributes}")
         print(f"[add_element] transform: {transform}")
 
@@ -339,8 +338,8 @@ class XmlCreate:
         print(f"[add_properties] bl_object: {content['bl_object']}")
         print(f"[add_properties] bl_type: {content['bl_type']}")
         print(f"[add_properties] ifc_info: {content['ifc_info']}")
-        print(f"[add_properties] parent: {content['parent']}")
-        print(f"[add_properties] this: {content['this']}")
+        print(f"[add_properties] parent_path: {content['parent_path']}")
+        print(f"[add_properties] this_path: {content['this_path']}")
         print(f"[add_properties] type: {content['attributes']['type']}")
         print(f"[add_properties] category: {content['attributes']['category']}")
         print(f"[add_properties] name: {content['attributes']['name']}")
@@ -355,11 +354,10 @@ class XmlCreate:
         attributes = content["attributes"]
         bl_object["ifc_info"] = content['ifc_info'].__str__()
         print(f"[add_properties] bl_props_ifc_info: {bl_object['ifc_info']}")
-        # TODO: The "parent" would change to path string later.
-        bl_object["parent"] = content["parent"].__str__()
-        print(f"[add_properties] bl_props_parent: {bl_object['parent']}")
-        bl_object["this"] = content["this"].__str__()
-        print(f"[add_properties] bl_props_this: {bl_object['this']}")
+        bl_object["parent_path"] = content["parent_path"].__str__()
+        print(f"[add_properties] bl_props_parent_path: {bl_object['parent_path']}")
+        bl_object["this_path"] = content["this_path"].__str__()
+        print(f"[add_properties] bl_props_this_path: {bl_object['this_path']}")
         bl_object["type"] = attributes["type"].__str__()
         print(f"[add_properties] bl_props_type: {bl_object['type']}")
         bl_object["category"] = attributes["category"].__str__()
@@ -391,11 +389,108 @@ class XmlCreate:
                 return obj
         print(f"[find_bl_object_by_ifc_info] not found: ifc_info[{key}] = {value}")
 
+    # @staticmethod
+    # def parent_bl_object(parent, child):
+    #     if parent in bpy.data.objects and child in bpy.data.objects:
+    #         obj_parent = bpy.data.objects[parent]
+    #         obj_child = bpy.data.objects[child]
+    #
+    #         obj_child.parent = obj_parent
+    #
+    #         col_parent = None
+    #         for col in bpy.data.collections:
+    #             if obj_parent.name in col.objects:
+    #                 col_parent = col
+    #                 break
+    #
+    #         if col_parent:
+    #             for col in bpy.data.collections:
+    #                 if obj_child.name in col.objects:
+    #                     col.objects.unlink(obj_child)
+    #
+    #             col_parent.objects.link(obj_child)
+
+    @staticmethod
+    def parent_bl_object(parent, child):
+        bo = BlenderOperator()
+        ob_parent = bo.get_object_by_name(parent)
+        ob_child = bo.get_object_by_name(child)
+
+        if ob_parent and ob_child:
+            ob_child.parent = ob_parent
+
+            coll_parent = bo.get_collection_by_object(ob_parent)
+
+            if coll_parent:
+                for coll in bpy.data.collections:
+                    if ob_child.name in coll.objects:
+                        bo.remove_object_from_collection(ob_child, coll)
+
+                bo.add_object_to_collection(ob_child, coll_parent)
+
     # def find_bl_object_by_name(self, name):
     #     for obj in self.bl_objects:
     #         if obj["name"] == name:
     #             return obj
     #     print(f"not found: name = {name}")
+
+
+class BlenderOperator:
+    @staticmethod
+    def get_object_by_name(name) -> bpy.types.Object:
+        if name in bpy.data.objects:
+            return bpy.data.objects[name]
+        return None
+
+    @staticmethod
+    def get_collection_by_object(obj) -> bpy.types.Collection:
+        for col in bpy.data.collections:
+            if obj.name in col.objects:
+                return col
+        return None
+
+    @staticmethod
+    def remove_object_from_collection(obj, col) -> None:
+        if obj.name in col.objects:
+            col.objects.unlink(obj)
+
+    @staticmethod
+    def add_object_to_collection(obj, col) -> None:
+        col.objects.link(obj)
+
+    def get_children_recursive(self, obj) -> list:
+        children = []
+        for child in obj.children:
+            children.append(child)
+            children.extend(self.get_children_recursive(child))
+        return children
+
+    def get_hierarchy(self, obj) -> list:
+        hierarchy = [obj]
+        hierarchy.extend(self.get_children_recursive(obj))
+        return hierarchy
+
+    def move_to_collection(self, obj, parent_col) -> None:
+        hierarchy = self.get_hierarchy(obj)
+        for obj in hierarchy:
+            for col in bpy.data.collections:
+                if obj.name in col.objects:
+                    self.remove_object_from_collection(obj, col)
+            self.add_object_to_collection(obj, parent_col)
+
+    def set_parent(self, parent, child) -> None:
+        parent_obj = self.get_object_by_name(parent)
+        child_obj = self.get_object_by_name(child)
+        if not parent_obj or not child_obj:
+            return
+        parent_col = self.get_collection_by_object(parent_obj)
+        if not parent_col:
+            return
+        hierarchy = self.get_hierarchy(child_obj)
+        for obj in hierarchy:
+            self.move_to_collection(obj, parent_col)
+            print(f"[BlenderOperator][set_parent] \"{obj.name}\" has been moved to collection \"{parent_col.name}\"")
+        child_obj.parent = parent_obj
 
 
 def main():

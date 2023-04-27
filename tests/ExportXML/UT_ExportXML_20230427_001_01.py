@@ -136,8 +136,8 @@ class XmlCreate:
             "bl_object": collection.name,
             "bl_type": type(collection).__name__,
             "ifc_info": self.ifc_building,
-            "parent": parent,
-            "this": None,
+            "parent_path": parent_path,
+            "this_path": None,
             "attributes": attributes,
             "transform": transform
         }
@@ -147,13 +147,14 @@ class XmlCreate:
         # element, this_path = self.get_element_with_path(self.root)
         this, this_path = self.get_elements_with_paths(self.root)[-1]
         print(f"[create_xml_building] this_path: {this_path}")
-        self.elements[this_path] = this_path
+        self.elements[this_path] = this
+        print(f"[create_xml_building] elements: {self.elements}")
         bl_object = self.add_properties(content)
         self.bl_objects.add(bl_object)
 
     def create_xml_building_storey(self, building_storey):
         parent_bl_object = self.find_bl_object_by_ifc_info("head", "IfcBuilding")
-        parent = parent_bl_object["this"]
+        parent = parent_bl_object["this_path"]
 
         # parent = self.xml_building
 
@@ -196,8 +197,8 @@ class XmlCreate:
             "bl_object": collection.name,
             "bl_type": type(collection).__name__,
             "ifc_info": building_storey,
-            "parent": parent,
-            "this": None,
+            "parent_path": parent,
+            "this_path": None,
             "attributes": attributes,
             "transform": transform
         }
@@ -293,12 +294,17 @@ class XmlCreate:
         element, path = self.get_elements_with_paths(root)[-1]
         return path
 
-    @staticmethod
-    def add_element(content):
+    def add_element(self, content):
         # bl_object = element["bl_object"]
-        parent = content["parent"]
+        parent_path = content["parent_path"]
         attributes = content["attributes"]
         transform = content["transform"]
+
+        parent = self.root
+        print(f"[add_element] elements: {self.elements}")
+        if self.elements.keys():
+            parent = self.elements[parent_path]
+        print(f"[add_element] parent: {parent}")
 
         sub = Et.SubElement(parent, "Object")
         sub.set("type", attributes["type"])
@@ -310,8 +316,10 @@ class XmlCreate:
         sub.set("model", attributes["model"])
         sub.set("time", attributes["time"])
         sub.set("noted", attributes["noted"])
-        content["this"] = sub
-        print(f"[add_element] this: {sub}")
+        this, this_path = self.get_elements_with_paths(self.root)[-1]
+        self.elements[this_path] = this
+        content["this_path"] = this_path
+        print(f"[add_element] this_path: {this_path}")
         print(f"[add_element] parent: {parent}")
         print(f"[add_element] attributes: {attributes}")
         print(f"[add_element] transform: {transform}")
@@ -339,8 +347,8 @@ class XmlCreate:
         print(f"[add_properties] bl_object: {content['bl_object']}")
         print(f"[add_properties] bl_type: {content['bl_type']}")
         print(f"[add_properties] ifc_info: {content['ifc_info']}")
-        print(f"[add_properties] parent: {content['parent']}")
-        print(f"[add_properties] this: {content['this']}")
+        print(f"[add_properties] parent_path: {content['parent_path']}")
+        print(f"[add_properties] this_path: {content['this_path']}")
         print(f"[add_properties] type: {content['attributes']['type']}")
         print(f"[add_properties] category: {content['attributes']['category']}")
         print(f"[add_properties] name: {content['attributes']['name']}")
@@ -355,11 +363,10 @@ class XmlCreate:
         attributes = content["attributes"]
         bl_object["ifc_info"] = content['ifc_info'].__str__()
         print(f"[add_properties] bl_props_ifc_info: {bl_object['ifc_info']}")
-        # TODO: The "parent" would change to path string later.
-        bl_object["parent"] = content["parent"].__str__()
-        print(f"[add_properties] bl_props_parent: {bl_object['parent']}")
-        bl_object["this"] = content["this"].__str__()
-        print(f"[add_properties] bl_props_this: {bl_object['this']}")
+        bl_object["parent_path"] = content["parent_path"].__str__()
+        print(f"[add_properties] bl_props_parent_path: {bl_object['parent_path']}")
+        bl_object["this_path"] = content["this_path"].__str__()
+        print(f"[add_properties] bl_props_this_path: {bl_object['this_path']}")
         bl_object["type"] = attributes["type"].__str__()
         print(f"[add_properties] bl_props_type: {bl_object['type']}")
         bl_object["category"] = attributes["category"].__str__()

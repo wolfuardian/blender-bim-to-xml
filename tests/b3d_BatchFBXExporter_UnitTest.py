@@ -14,15 +14,16 @@ def create_col(str, parent):
         exist_col = bpy.data.collections.get(str)
         if exist_col:
             parent.children.link(exist_col)
-            #            print(">>> \"{}\" already exists, has moved to this scene.".format(str))
+            print(">>> \"{}\" already exists, has moved to this scene.".format(str))
             return exist_col
         else:
             new_col = bpy.data.collections.new(str)
+            new_col = bpy.data.objects.new("empty", None)
             parent.children.link(new_col)
-            #            print(">>> \"{}\" has been created successfully.".format(str))
+            print(">>> \"{}\" has been created successfully.".format(str))
             return new_col
     else:
-        #        print(">>> \"{}\" already exists.".format(str))
+        print(">>> \"{}\" already exists.".format(str))
         return bpy.context.scene.collection.children.get(str)
 
 
@@ -108,17 +109,17 @@ def create_col_recursion(str, parent, limit=3, offset=0):
                 else:
                     o.name = re_current[0]
 
-                if o.type == 'MESH':
-                    print('>>> Decimate modifier added to \"{}\".'.format(o.name))
-                    print(o.BIMAttributeProperties.ifc_definition_id)
+                # if o.type == 'MESH':
+                #     print('>>> Decimate modifier added to \"{}\".'.format(o.name))
+                    # print(o.BIMAttributeProperties.ifc_definition_id)
                     # obj = bpy.data.objects.get('IfcBuildingElementProxy/衛生間隔板-門:衛生間隔板.134')
 
-                    # Modify
-                    mod = o.modifiers.get("Decimate")
-                    if mod is None:
-                        # otherwise add a modifier to selected object
-                        mod = o.modifiers.new('Decimate', type='DECIMATE')
-                        mod.decimate_type = 'DISSOLVE'
+                    # # Modify
+                    # mod = o.modifiers.get("Decimate")
+                    # if mod is None:
+                    #     # otherwise add a modifier to selected object
+                    #     mod = o.modifiers.new('Decimate', type='DECIMATE')
+                    #     mod.decimate_type = 'DISSOLVE'
 
                 exist_col.objects.link(o)
 
@@ -194,7 +195,7 @@ def run_batch():
     # User defined
     # ------------------------------------
     prefix_name = '__inst__'
-    root_col_name = 'IfcBuilding/'
+    root_col_name = 'IfcBuilding/高雄港埠旅運中心'
     # ------------------------------------
 
     if prefix_name == '':
@@ -210,14 +211,14 @@ def run_batch():
     # Step 1
     # ------------------------------------
     if not bpy.data.collections.get(root_col_name):
-        # print(">>> \"{}\" not found, will end the script.".format(root_col_name))
+        print(">>> \"{}\" not found, will end the script.".format(root_col_name))
         # Exit the script.
         return
 
     # Fix the ignore string.
     root_col = select_col(root_col_name)
     # rename_recurse('[^A-Za-z0-9/:_]', 'x', root_col.name)
-    # print(">>> \"{}\" has found that the script will be executed.".format(root_col.name))
+    print(">>> \"{}\" has found that the script will be executed.".format(root_col.name))
     root_col_new = create_col(prefix_name + root_col_name, bpy.context.scene.collection)
 
     # ------------------------------------
@@ -239,8 +240,8 @@ def run_batch():
             total = float(len(class_col_sets))
             percentage = round((current / total) * 100, 2)
             p = progress_bar(percentage, '#', 40)
-            # print(">>> class_col progress rate: [{}]  {} % ({}/{}) / \"{}\" done.".format(p, percentage, int(current),
-            #                                                                               int(total), class_col.name))
+            print(">>> class_col progress rate: [{}]  {} % ({}/{}) / \"{}\" done.".format(p, percentage, int(current),
+                                                                                          int(total), class_col.name))
 
             bpy.data.collections.remove(class_col)
 
@@ -248,8 +249,8 @@ def run_batch():
         total = float(len(layer_col_sets))
         percentage = round((current / total) * 100, 2)
         p = progress_bar(percentage, '#', 40)
-        # print(">>> class_col progress rate: [{}]  {} % ({}/{}) / \"{}\" done.".format(p, percentage, int(current),
-        #                                                                               int(total), layer_col.name))
+        print(">>> class_col progress rate: [{}]  {} % ({}/{}) / \"{}\" done.".format(p, percentage, int(current),
+                                                                                      int(total), layer_col.name))
 
         objs = [o for o in layer_col.objects if o.type == 'MESH']
         for o in objs:
@@ -267,8 +268,8 @@ def run_batch():
             total = float(len(objs))
             percentage = round((current / total) * 100, 2)
             p = progress_bar(percentage, '#', 40)
-            # print(">>> objs progress rate: [{}]  {} % ({}/{}) / \"{}\" done.".format(p, percentage, int(current),
-            #                                                                          int(total), o.name))
+            print(">>> objs progress rate: [{}]  {} % ({}/{}) / \"{}\" done.".format(p, percentage, int(current),
+                                                                                     int(total), o.name))
 
     # ------------------------------------
     # Step 2 - Complete the output, report and prompt.
