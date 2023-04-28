@@ -10,29 +10,21 @@ filename = "UnitTest_ExportXML_20230425_001.xml"
 file = output + "\\" + filename
 
 
-def select_collection(name):
-    def recursive_search(collection):
-        for collection in collection.children:
-            if name in collection.name:
-                bpy.context.view_layer.active_layer_collection = collection
-            recursive_search(collection)
-        return bpy.context.view_layer.active_layer_collection
-
-    return recursive_search(bpy.context.view_layer.layer_collection)
-
-
-class XmlCreateSettings:
+class XMLCreateSettings:
     def __init__(self):
         self.root = None
+        self.tree = None
         self.data_source = None
 
     @staticmethod
     def factory(system, version, source):
-        settings = XmlCreateSettings()
+        settings = XMLCreateSettings()
         # Root
         settings.root = Et.Element("Root")
         settings.root.set("xmlns:xsd", "http://www.w3.org/2001/XMLSchema")
         settings.root.set("xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance")
+        # Tree
+        settings.tree = Et.ElementTree(settings.root)
         # DataSource
         settings.data_source = Et.SubElement(settings.root, "DataSource")
         settings.data_source.set("ProductType", system)
@@ -41,11 +33,18 @@ class XmlCreateSettings:
         return settings
 
 
-class XmlCreate:
-    def __init__(self, xml_create_settings: XmlCreateSettings):
+class XMLCreate:
+    def __init__(self, xml_create_settings: XMLCreateSettings):
         self.xml_create_settings = xml_create_settings
         self.root = xml_create_settings.root
+        self.tree = xml_create_settings.tree
         self.data_source = xml_create_settings.data_source
+        self.bl_op = BlenderOperator()
+        self.bl_col_root = self.bl_op.get_collection_by_name("IfcProject/")
+        self.bl_obj_root = self.bl_op.add_object("Root")
+        self.bl_op.move_to_collection(self.bl_obj_root, self.bl_col_root)
+        # self.bl_et = BlenderElementTree(self.bl_op.add_object("Root"))
+
         self.collections = {}
         self.ifc_project = {}
         self.ifc_site = {}
@@ -372,26 +371,10 @@ class XmlCreate:
                 return obj
         print(f"[find_bl_object_by_ifc_info] not found: ifc_info[{key}] = {value}")
 
-    # @staticmethod
-    # def parent_bl_object(parent, child):
-    #     if parent in bpy.data.objects and child in bpy.data.objects:
-    #         obj_parent = bpy.data.objects[parent]
-    #         obj_child = bpy.data.objects[child]
-    #
-    #         obj_child.parent = obj_parent
-    #
-    #         col_parent = None
-    #         for col in bpy.data.collections:
-    #             if obj_parent.name in col.objects:
-    #                 col_parent = col
-    #                 break
-    #
-    #         if col_parent:
-    #             for col in bpy.data.collections:
-    #                 if obj_child.name in col.objects:
-    #                     col.objects.unlink(obj_child)
-    #
-    #             col_parent.objects.link(obj_child)
+
+class BlenderElementTree:
+    def __init__(self, element=None):
+        self._root = element  # first node
 
 
 class BlenderOperator:
@@ -399,6 +382,13 @@ class BlenderOperator:
     def get_object_by_name(name) -> bpy.types.Object:
         if name in bpy.data.objects:
             return bpy.data.objects[name]
+        return None
+
+    @staticmethod
+    def get_collection_by_name(name) -> bpy.types.Collection:
+        for col in bpy.data.collections:
+            if col.name == name:
+                return col
         return None
 
     @staticmethod
@@ -437,7 +427,7 @@ class BlenderOperator:
                     self.remove_object_from_collection(obj, col)
             self.add_object_to_collection(obj, parent_col)
 
-    def set_parent(self, parent, child) -> None:
+    def set_parent(self, parent, child) -> bpy.types.Object:
         parent_obj = self.get_object_by_name(parent)
         child_obj = self.get_object_by_name(child)
         if not parent_obj or not child_obj:
@@ -448,16 +438,40 @@ class BlenderOperator:
         hierarchy = self.get_hierarchy(child_obj)
         for obj in hierarchy:
             self.move_to_collection(obj, parent_col)
-            print(f"[BlenderOperator][set_parent] \"{obj.name}\" has been moved to collection \"{parent_col.name}\"")
+            print(f"[command] \"{obj.name}\" has been moved to collection \"{parent_col.name}\"")
         child_obj.parent = parent_obj
+        return parent_obj
+
+    def set_parent_by_select(self) -> bpy.types.Object:
+        selected_objects = bpy.context.selected_objects
+        if len(selected_objects) < 2:
+            print("[command] Please select at least 2 objects.")
+            return
+        parent_obj = bpy.context.active_object
+        if parent_obj not in selected_objects:
+            print("[command] Please select the parent object.")
+            return
+        for obj in selected_objects:
+            if obj != parent_obj:
+                self.set_parent(parent_obj.name, obj.name)
+                print(f"[command] \"{obj.name}\" has been set parent to \"{parent_obj.name}\"")
+        return parent_obj
+
+    def add_object(self, name, type="EMPTY", parent=None) -> bpy.types.Object:
+        bpy.ops.object.add(type=type)
+        new_object = bpy.context.active_object
+        new_object.name = name
+        if parent:
+            self.set_parent(parent, new_object.name)
+        return new_object
 
 
 def main():
     # print("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n")
     # Pre-Settings
-    xml_create_settings = XmlCreateSettings.factory("OCMS2_0", "2023.02.16", "Unity")
+    xml_create_settings = XMLCreateSettings.factory("OCMS2_0", "2023.02.16", "Unity")
     # Create
-    xml_create = XmlCreate(xml_create_settings)
+    xml_create = XMLCreate(xml_create_settings)
     xml_create.execute()
     # print(f"collections: {xml_create.collections}")
     # Analysis collection
