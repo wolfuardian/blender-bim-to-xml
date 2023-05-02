@@ -53,13 +53,13 @@ class BlenderOperator:
         if not parent_obj or not child_obj:
             return
         parent_col = self.get_collection_by_object(parent_obj)
-        if not parent_col:
-            return
-        hierarchy = self.get_hierarchy(child_obj)
-        for obj in hierarchy:
-            self.move_to_collection(obj, parent_col)
-            print(f"\"{obj.name}\" has been moved to collection \"{parent_col.name}\"")
+        if parent_col:
+            hierarchy = self.get_hierarchy(child_obj)
+            for obj in hierarchy:
+                self.move_to_collection(obj, parent_col)
+                # print(f"\"{obj.name}\" has been moved to collection \"{parent_col.name}\"")
         child_obj.parent = parent_obj
+        # print(f"\"{child_obj.name}\" has been set parent to \"{parent_obj.name}\"")
         return parent_obj
 
     def set_parent_by_select(self) -> bpy.types.Object:
@@ -74,7 +74,7 @@ class BlenderOperator:
         for obj in selected_objects:
             if obj != parent_obj:
                 self.set_parent(parent_obj.name, obj.name)
-                print(f"\"{obj.name}\" has been set parent to \"{parent_obj.name}\"")
+                # print(f"\"{obj.name}\" has been set parent to \"{parent_obj.name}\"")
         return parent_obj
 
     @staticmethod
@@ -97,22 +97,26 @@ class BlenderOperator:
             return
         traverse(bpy.data.collections.get(root_col))
 
-    def add_object(self, name, type="EMPTY", parent=None) -> bpy.types.Object:
+    def add_object(self, name=None, type="EMPTY", parent=None) -> bpy.types.Object:
         bpy.ops.object.add(type=type)
-        new_object = bpy.context.active_object
-        new_object.name = name
+        new_object = bpy.context.object
+        if name:
+            new_object.name = name
         if parent:
             self.set_parent(parent, new_object.name)
+        # print(f"\"{new_object.name}\" has been added.")
         return new_object
 
 
 class IFCParser:
     def __init__(self, ifc_root="IfcBuilding/"):
         self.root = bpy.data.collections.get(ifc_root)
-        self.bl_collections = [self.root.name] + self.convert_to_names(self.root.children_recursive)
-        self.bl_objects = self.root.all_objects.keys()
-        self.ifc_tree = {}
-        self.ifc_type = {}
+        self.ifc_collections = [self.root.name] + self.convert_to_names(self.root.children_recursive)
+        self.ifc_objects = self.root.all_objects.keys()
+        self.ifc_types = {}
+        self.ifc_inherit = {}
+
+        self.is_executed = False
 
     @staticmethod
     def convert_to_names(objects_or_collections):
@@ -121,78 +125,78 @@ class IFCParser:
             names.append(obj.name)
         return names
 
-    def define_ifc_tree(self):
-        self.ifc_tree[self.root.name] = None
-        for parent in self.bl_objects:
+    def define_inherit(self):
+        self.ifc_inherit[self.root.name] = None
+        for parent in self.ifc_objects:
             # Only if the object is a transform (parent) object
-            if parent not in self.bl_collections:
+            if parent not in self.ifc_collections:
                 continue
             for child in bpy.data.collections[parent].objects.keys():
                 # If the child is the same as the parent, then it is the root object
                 if child == parent:
-                    for collection in self.bl_collections:
+                    for collection in self.ifc_collections:
                         if bpy.data.collections[parent].name not in bpy.data.collections[collection].children.keys():
                             continue
-                        self.ifc_tree[child] = collection
+                        self.ifc_inherit[child] = collection
                         break
                     continue
-                self.ifc_tree[child] = parent
+                self.ifc_inherit[child] = parent
 
-    def define_type(self):
-        if not self.ifc_tree:
+    def define_types(self):
+        if not self.ifc_inherit:
             return
-        for child in self.ifc_tree.keys():
-            if child in self.bl_collections:
-                self.ifc_type[child] = "collection"
+        for child in self.ifc_inherit.keys():
+            if child in self.ifc_collections:
+                self.ifc_types[child] = "collection"
             else:
-                self.ifc_type[child] = "object"
+                self.ifc_types[child] = "object"
 
     def execute(self):
-        print(f"start defining ifc_tree")
-        self.define_ifc_tree()
-        for child, parent in self.ifc_tree.items():
-            print(f"parent: {parent}, child: {child}")
-        print(f"total ifc_tree: {len(self.ifc_tree.items())}")
-        print(f"\nstart defining type")
-        self.define_type()
-        for child, type in self.ifc_type.items():
-            print(f"type: {type}, child: {child}")
-        print(f"total ifc_type: {len(self.ifc_type.items())}")
+        self.is_executed = True
+
+        self.define_inherit()
+        print("IFC tree has been defined.")
 
 
 class IFCBuilder:
     def __init__(self, parser: IFCParser):
         self.ifc_parser = parser
-        self.ifc_tree = parser.ifc_tree
-        self.ifc_type = parser.ifc_type
-        self.bl_collections = parser.bl_collections
-        self.bl_objects = parser.bl_objects
         self.ifc_root = parser.root.name
-        self.ifc_objects = {}
+        self.ifc_type = parser.ifc_types
+        self.ifc_inherit = parser.ifc_inherit
+        self.ifc_objects = parser.ifc_objects
+        self.ifc_objects_partners = {}
 
-    def build_tree_objects(self):
+        self.is_executed = False
 
-        if not self.ifc_tree:
-            print("IFC tree is empty")
+    def build(self):
+        if not self.ifc_inherit:
+            print("IFC objects inherit is empty")
             return
-        print(f"\nstart building objects")
-        for child, parent in self.ifc_tree.items():
-            if child in self.bl_objects:
-                self.ifc_objects[child] = BlenderOperator().add_object(child)
-                print(f"\"{self.ifc_objects[child].name}\" has been added")
+        for child, parent in self.ifc_inherit.items():
+            if child in self.ifc_objects:
+                self.ifc_objects_partners[child] = BlenderOperator().add_object(child).name
 
-        print(f"\nstart checking objects")
-        for obj_name, obj in self.ifc_objects.items():
-            print(f"\"{obj_name}\" -> {obj.name}")
-
-        print(f"total {len(self.ifc_objects)} objects have been added")
+    def assemble(self):
+        for ifc, obj in self.ifc_objects_partners.items():
+            ifc_parent = self.ifc_inherit.get(ifc)
+            if not ifc_parent:
+                continue
+            parent = self.ifc_objects_partners[ifc_parent]
+            BlenderOperator().set_parent(parent, obj)
 
     def execute(self):
-        self.ifc_parser.execute()
-        self.build_tree_objects()
+        self.is_executed = True
+        if not self.ifc_parser.is_executed:
+            return print("IFC parser has not been executed, would not build IFC objects.")
+
+        self.build()
+        self.assemble()
+        print("New IFC building has been built.")
 
 
 if __name__ == "__main__":
     ifc_parser = IFCParser("IfcBuilding/高雄港埠旅運中心")
+    ifc_parser.execute()
     ifc_builder = IFCBuilder(ifc_parser)
     ifc_builder.execute()
