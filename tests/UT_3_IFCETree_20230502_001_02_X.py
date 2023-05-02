@@ -2,6 +2,7 @@ import bpy
 import os
 from math import radians
 from mathutils import Euler
+from datetime import datetime
 
 os.system('cls')
 
@@ -9,60 +10,68 @@ os.system('cls')
 class BlenderOperator:
     @staticmethod
     def get_object_by_name(name) -> bpy.types.Object:
+        if not name:
+            return None
         if name in bpy.data.objects:
             return bpy.data.objects[name]
         return None
 
     @staticmethod
-    def get_collection_by_object(obj) -> bpy.types.Collection:
+    def get_inherit_coll(obj: str) -> str:
         for col in bpy.data.collections:
-            if obj.name in col.objects:
-                return col
-        return None
+            if not obj:
+                continue
+            if obj in col.objects:
+                return col.name
+        return ''
 
     @staticmethod
-    def remove_object_from_collection(obj, col) -> None:
-        if obj.name in col.objects:
-            col.objects.unlink(obj)
+    def unlink_ob(ob: str, coll: str):
+        print(f"[unlink_ob] \"{ob}\" has been unlinked from \"{coll}\".")
+        if ob in bpy.data.collections.get(coll).objects:
+            bpy.data.collections.get(coll).objects.unlink(bpy.data.objects.get(ob))
 
     @staticmethod
-    def add_object_to_collection(obj, col) -> None:
-        col.objects.link(obj)
+    def link_ob(ob: str, coll: str):
+        print(f"[link_ob] \"{ob}\" has been linked to \"{coll}\".")
+        if coll:
+            bpy.data.collections.get(coll).objects.link(bpy.data.objects.get(ob))
+        else:
+            bpy.context.scene.collection.objects.link(bpy.data.objects.get(ob))
 
-    def get_children_recursive(self, obj) -> list:
+    def get_ob_children_recurse(self, ob: str) -> list[str]:
         children = []
-        for child in obj.children:
-            children.append(child)
-            children.extend(self.get_children_recursive(child))
+        for child in bpy.data.objects.get(ob).children:
+            children.append(child.name)
+            children.extend(self.get_ob_children_recurse(child.name))
         return children
 
-    def get_hierarchy(self, obj) -> list:
-        hierarchy = [obj]
-        hierarchy.extend(self.get_children_recursive(obj))
+    def get_hierarchy(self, ob: str) -> list[str]:
+        hierarchy = [ob]
+        hierarchy.extend(self.get_ob_children_recurse(ob))
         return hierarchy
 
-    def move_to_collection(self, obj, parent_col) -> None:
-        hierarchy = self.get_hierarchy(obj)
-        for obj in hierarchy:
-            for col in bpy.data.collections:
-                if obj.name in col.objects:
-                    self.remove_object_from_collection(obj, col)
-            self.add_object_to_collection(obj, parent_col)
+    def move_ob_to_coll(self, source: str, target: str) -> None:
+        hierarchy = self.get_hierarchy(source)
+        print(f"[move_ob_to_coll] hierarchy: {hierarchy}")
+        for ob in hierarchy:
+            for coll in bpy.data.collections:
+                # print(f"[move_ob_to_coll] \"{ob}\" in \"{coll}\"")
+                if ob in coll.objects:
+                    self.unlink_ob(ob, coll.name)
+            # print(f"[move_ob_to_coll] \"{ob}\" has been moved to \"{target}\".")
+            self.link_ob(ob, target)
 
-    def set_parent(self, child, parent) -> bpy.types.Object:
-        child_obj = self.get_object_by_name(child)
-        parent_obj = self.get_object_by_name(parent)
-        if not parent_obj or not child_obj:
-            return
-        parent_col = self.get_collection_by_object(parent_obj)
-        if parent_col:
-            hierarchy = self.get_hierarchy(child_obj)
-            for obj in hierarchy:
-                self.move_to_collection(obj, parent_col)
-                # print(f"\"{obj.name}\" has been moved to collection \"{parent_col.name}\"")
-        child_obj.parent = parent_obj
-        # print(f"\"{child_obj.name}\" has been set parent to \"{parent_obj.name}\"")
-        return parent_obj
+    def set_parent(self, child: str, parent: str) -> str:
+        print(f"[set_parent] child: {child}, parent: {parent}")
+        coll = self.get_inherit_coll(parent)
+        print(f"[set_parent] coll: {coll}")
+        hierarchy = self.get_hierarchy(child)
+        for ob in hierarchy:
+            self.move_ob_to_coll(ob, coll)
+        if parent:
+            bpy.data.objects.get(child).parent = bpy.data.objects.get(parent)
+        return parent
 
     def set_parent_by_select(self) -> bpy.types.Object:
         selected_objects = bpy.context.selected_objects
@@ -139,11 +148,26 @@ class BlenderOperator:
 class IFCParser:
     def __init__(self, root="IfcBuilding/"):
         self.bl_root = bpy.data.collections.get(root)
-        self.ifc_collections = [self.bl_root.name] + self.convert_to_names(self.bl_root.children_recursive)
-        self.ifc_objects = self.bl_root.all_objects.keys()
+        self.ifc_ignore = ["Views", "Types", "StructuralItems", "Members", "Connections"]
+        self.ifc_collections = []
+        self.ifc_objects = []
         self.ifc_info = {}
+        self.ifc_types = {}  # The type of the object, e.g. IfcWall, IfcWindow, IfcDoor, etc.
+        self.init_ifc_collections()
+        self.init_ifc_objects()
+
+        self.scene_collection = bpy.context.scene.collection
 
         self.is_executed = False
+
+    def init_ifc_collections(self):
+        self.ifc_collections = [self.bl_root.name] + self.convert_to_names(self.bl_root.children_recursive)
+        for col in self.ifc_collections:
+            if col in self.ifc_ignore:
+                self.ifc_collections.remove(col)
+
+    def init_ifc_objects(self):
+        self.ifc_objects = self.bl_root.all_objects.keys()
 
     @staticmethod
     def convert_to_names(objects_or_collections):
@@ -156,20 +180,24 @@ class IFCParser:
         content = {}
         self.ifc_info[self.bl_root.name] = None
         for obj in self.ifc_objects:
-            content["bl_type"] = self.define_bl_type(obj)
             content["ifc_parent"] = self.define_ifc_parent(obj)
+            if content["ifc_parent"] in self.ifc_ignore:
+                self.ifc_types[obj] = bpy.data.objects.get(obj)
+                continue
             content["ifc_type"] = self.define_ifc_type(obj)
             content["ifc_project"] = self.define_ifc_project(obj)
             content["ifc_site"] = self.define_ifc_site(obj)
             content["ifc_building"] = self.define_ifc_building(obj)
             content["ifc_storey"] = self.define_ifc_storey(obj)
+            # content["bl_type"] = self.define_bl_type(obj)
             content["transform"] = self.define_transform(obj)
+            content["attributes"] = self.define_attributes(obj)
             self.ifc_info[obj] = dict(content)
 
-    def define_bl_type(self, obj):
-        if obj in self.ifc_collections:
-            return type(bpy.data.collections.get(obj)).__name__
-        return type(bpy.data.objects.get(obj)).__name__
+    # def define_bl_type(self, obj):
+    #     if obj in self.ifc_collections:
+    #         return type(bpy.data.collections.get(obj)).__name__
+    #     return type(bpy.data.objects.get(obj)).__name__
 
     def define_ifc_parent(self, obj):
         for col in self.ifc_collections:
@@ -227,6 +255,25 @@ class IFCParser:
         }
         return transform
 
+    def define_attributes(self, obj):
+        attributes = {
+            "type": self.define_ifc_type(obj),
+            "category": "0",
+            "name": obj.split("/")[0],
+            "alias": obj,
+            "id": "",
+            "remark": "",
+            "model": obj.split("/")[0],
+            "time": self.get_date_time(),
+            "noted": "created"
+        }
+        return attributes
+
+    @staticmethod
+    def get_date_time():
+        dt = datetime.now()
+        return dt.strftime("%Y/%m/%d %H:%M")
+
     def execute(self):
         self.is_executed = True
 
@@ -242,8 +289,6 @@ class IFCBuilder:
         self.is_executed = False
 
     def build(self):
-        # Select the root collection.
-        bpy.context.view_layer.active_layer_collection = bpy.context.view_layer.layer_collection
         if not self.ifc_info:
             print("IFC elements has not been parsed, would not build IFC objects.")
             return
@@ -255,6 +300,9 @@ class IFCBuilder:
             inst = self.ifc_info[obj]["ifc_inst"]
             ifc_parent = self.ifc_info[obj]["ifc_parent"]
             if not ifc_parent:
+                print("No parent found for object: {}".format(obj))
+                # BlenderOperator().move_to_collection(inst, bpy.context.scene.collection)
+                BlenderOperator().set_parent(inst, '')
                 continue
             parent = self.ifc_info[ifc_parent]["ifc_inst"]
             BlenderOperator().set_parent(inst, parent)
@@ -311,10 +359,30 @@ class IFCETree:
         def __repr__(self):
             return f"<IFCElement '{self.obj.name}'>"
 
+    @staticmethod
+    def add_properties(element, content):
+        attributes = content["attributes"]
+        element.set_attr("type", attributes["type"].__str__())
+        element.set_attr("category", attributes["category"].__str__())
+        element.set_attr("name", attributes["name"].__str__())
+        element.set_attr("alias", attributes["alias"].__str__())
+        element.set_attr("remark", attributes["remark"].__str__())
+        element.set_attr("model", attributes["model"].__str__())
+        element.set_attr("time", attributes["time"].__str__())
+        element.set_attr("noted", attributes["noted"].__str__())
+
+        # bl_object["ifc_info"] = content['ifc_info'].__str__()
+        # print(f"[add_properties] bl_props_ifc_info: {bl_object['ifc_info']}")
+        # bl_object["parent_path"] = content["parent_path"].__str__()
+        # print(f"[add_properties] bl_props_parent_path: {bl_object['parent_path']}")
+        # bl_object["this_path"] = content["this_path"].__str__()
+        # print(f"[add_properties] bl_props_this_path: {bl_object['this_path']}"
+
     def establish(self):
-        for ifc_info in self.ifc_info.values():
-            obj = ifc_info["ifc_inst"]
-            self.elements[obj] = self.Element(bpy.data.objects.get(obj))
+        for content in self.ifc_info.values():
+            inst = content["ifc_inst"]
+            self.elements[inst] = self.Element(bpy.data.objects.get(inst))
+            self.add_properties(self.elements[inst], content)
 
     def execute(self):
         if not self.builder.is_executed:
@@ -377,7 +445,7 @@ class IFCETree:
 # print(blender_element.attributes)  # 輸出：{'id': 'my_custom_id'}
 
 if __name__ == "__main__":
-    ifc_parser = IFCParser("IfcBuilding/高雄港埠旅運中心")
+    ifc_parser = IFCParser("IfcProject/")
     ifc_parser.execute()
     ifc_builder = IFCBuilder(ifc_parser)
     ifc_builder.execute()
