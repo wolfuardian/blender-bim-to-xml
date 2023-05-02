@@ -1,5 +1,7 @@
 import bpy
 import os
+from math import radians
+from mathutils import Euler
 
 os.system('cls')
 
@@ -65,11 +67,11 @@ class BlenderOperator:
     def set_parent_by_select(self) -> bpy.types.Object:
         selected_objects = bpy.context.selected_objects
         if len(selected_objects) < 2:
-            print("Please select at least 2 objects.")
+            print("[set_parent_by_select] Please select at least 2 objects.")
             return
         parent_obj = bpy.context.active_object
         if parent_obj not in selected_objects:
-            print("Please select the parent object.")
+            print("[set_parent_by_select] Please select the parent object.")
             return
         for obj in selected_objects:
             if obj != parent_obj:
@@ -93,7 +95,7 @@ class BlenderOperator:
                 traverse(child)
 
         if root_col not in bpy.data.collections:
-            print(f"Collection \"{root_col}\" not found.")
+            print(f"[reduce_ifc_objects] Collection \"{root_col}\" not found.")
             return
         traverse(bpy.data.collections.get(root_col))
 
@@ -106,6 +108,32 @@ class BlenderOperator:
             self.set_parent(parent, new_object.name)
         # print(f"\"{new_object.name}\" has been added.")
         return new_object
+
+    @staticmethod
+    def set_location(obj: str, location: tuple) -> None:
+        obj = bpy.data.objects.get(obj)
+        if not obj:
+            print(f"[set_location] Object {obj} not found")
+            return
+        obj.location = location
+
+    @staticmethod
+    def set_rotation(obj, rotation, use_degree=False):
+        obj = bpy.data.objects.get(obj)
+        if not obj:
+            print(f"[set_location] Object {obj} not found")
+            return
+        if use_degree:
+            rotation = tuple(radians(angle) for angle in rotation)
+        obj.rotation_euler = Euler(rotation)
+
+    @staticmethod
+    def set_scale(obj, scale):
+        obj = bpy.data.objects.get(obj)
+        if not obj:
+            print(f"[set_location] Object {obj} not found")
+            return
+        obj.scale = scale
 
 
 class IFCParser:
@@ -181,21 +209,21 @@ class IFCParser:
     def define_ifc_transform(obj):
         obj = bpy.data.objects[obj]
         transform = {
-            "position": [
-                obj.matrix_world.to_translation().x.__str__(),
-                obj.matrix_world.to_translation().y.__str__(),
-                obj.matrix_world.to_translation().z.__str__()
-            ],
-            "rotation": [
-                obj.matrix_world.to_euler().x.__str__(),
-                obj.matrix_world.to_euler().y.__str__(),
-                obj.matrix_world.to_euler().z.__str__()
-            ],
-            "scale": [
-                obj.matrix_world.to_scale().x.__str__(),
-                obj.matrix_world.to_scale().y.__str__(),
-                obj.matrix_world.to_scale().z.__str__()
-            ]
+            "position": (
+                obj.matrix_world.to_translation().x,
+                obj.matrix_world.to_translation().y,
+                obj.matrix_world.to_translation().z
+            ),
+            "rotation": (
+                obj.matrix_world.to_euler().x,
+                obj.matrix_world.to_euler().y,
+                obj.matrix_world.to_euler().z
+            ),
+            "scale": (
+                obj.matrix_world.to_scale().x,
+                obj.matrix_world.to_scale().y,
+                obj.matrix_world.to_scale().z
+            )
         }
         return transform
 
@@ -229,6 +257,17 @@ class IFCBuilder:
             parent = self.instances[ifc_parent]
             BlenderOperator().set_parent(parent, inst)
 
+    def set_transform(self):
+        for obj, inst in self.instances.items():
+            transform = self.ifc_elements[obj]["ifc_transform"]
+            position = transform["position"]
+            rotation = transform["rotation"]
+            scale = transform["scale"]
+
+            BlenderOperator().set_location(inst, position)
+            BlenderOperator().set_rotation(inst, rotation)
+            BlenderOperator().set_scale(inst, scale)
+
     def execute(self):
         self.is_executed = True
         if not self.parser.is_executed:
@@ -236,6 +275,7 @@ class IFCBuilder:
 
         self.build()
         self.assemble()
+        self.set_transform()
         print("New IFC objects has been built.")
 
 
