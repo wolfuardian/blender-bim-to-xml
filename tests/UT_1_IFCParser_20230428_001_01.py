@@ -48,13 +48,7 @@ class IFCParser:
 
     def execute(self):
         self.define_parent()
-        print(f"ifc_tree items count: {len(self.ifc_tree.items())}")
-        for child, parent in self.ifc_tree.items():
-            print(f"parent: {parent}, child: {child}")
         self.define_type()
-        print(f"\nifc_type items count: {len(self.ifc_type.items())}")
-        for child, type in self.ifc_type.items():
-            print(f"type: {type}, child: {child}")
 
 
 if __name__ == "__main__":
