@@ -136,7 +136,6 @@ class IFCParser:
             content["ifc_building"] = self.define_ifc_building(obj)
             content["ifc_storey"] = self.define_ifc_storey(obj)
             content["ifc_transform"] = self.define_ifc_transform(obj)
-            # TODO: et_path: root/高雄港埠旅運中心/15FL
             self.ifc_elements[obj] = dict(content)
 
     def define_bl_type(self, obj):
