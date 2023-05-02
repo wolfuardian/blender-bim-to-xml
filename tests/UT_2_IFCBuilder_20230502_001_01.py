@@ -238,7 +238,7 @@ class IFCBuilder:
     def __init__(self, parser: IFCParser):
         self.parser = parser
         self.ifc_elements = parser.ifc_elements
-        self.instances = {}
+        self.ifc_instances = {}
 
         self.is_executed = False
 
@@ -247,18 +247,18 @@ class IFCBuilder:
             print("IFC elements has not been parsed, would not build IFC objects.")
             return
         for obj, elem in self.ifc_elements.items():
-            self.instances[obj] = BlenderOperator().add_object(obj).name
+            self.ifc_instances[obj] = BlenderOperator().add_object(obj).name
 
     def assemble(self):
-        for obj, inst in self.instances.items():
+        for obj, inst in self.ifc_instances.items():
             ifc_parent = self.ifc_elements[obj]["ifc_parent"]
             if not ifc_parent:
                 continue
-            parent = self.instances[ifc_parent]
+            parent = self.ifc_instances[ifc_parent]
             BlenderOperator().set_parent(parent, inst)
 
     def set_transform(self):
-        for obj, inst in self.instances.items():
+        for obj, inst in self.ifc_instances.items():
             transform = self.ifc_elements[obj]["ifc_transform"]
             position = transform["position"]
             rotation = transform["rotation"]
